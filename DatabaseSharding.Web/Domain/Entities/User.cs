@@ -29,6 +29,6 @@
         }
 
         public string GetFullName() => $"{FirstName} {LastName}";
-        public ShardKey GetShardKey() => new(Email.Value);
+        public ShardKey GetShardKey() => new(Id.ToString());
     }
 }
