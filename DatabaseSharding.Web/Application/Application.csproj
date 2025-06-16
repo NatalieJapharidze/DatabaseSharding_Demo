@@ -19,9 +19,6 @@
 	<ItemGroup>
 	  <Folder Include="Features\Sharding\Commands\RebalanceShards\" />
 	  <Folder Include="Features\Sharding\Queries\GetShardInfo\" />
-	  <Folder Include="Features\Users\Commands\DeleteUser\" />
-	  <Folder Include="Features\Users\Commands\UpdateUser\" />
-	  <Folder Include="Features\Users\Queries\GetUserByEmail\" />
 	</ItemGroup>
 
 </Project>

@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Domain.Interfaces.Repositories;
 using Domain.Models;
-using Infrastructure.Services;
+using Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Repositories

@@ -3,6 +3,7 @@ using Domain.Interfaces.Services;
 using Infrastructure.Configuration;
 using Infrastructure.Data.Contexts;
 using Infrastructure.Health;
+using Infrastructure.Interfaces;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
@@ -24,12 +25,17 @@ namespace Infrastructure
             services.AddScoped<IShardingService, ShardingService>();
             services.AddScoped<IShardConnectionService, ShardConnectionService>();
             services.AddScoped<IDatabaseInitializationService, DatabaseInitializationService>();
+            services.AddScoped<IShardMetricsService, ShardMetricsService>();
+            services.AddScoped<IShardHealthService, ShardHealthService>();
 
             // Repositories
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IShardRepository, ShardRepository>();
 
             // Background Services
+            // Background Services (Register last to ensure dependencies are available)
+            services.AddSingleton<ShardRebalancingService>();
+            services.AddHostedService(provider => provider.GetRequiredService<ShardRebalancingService>());
             services.AddHostedService<ShardRebalancingService>();
 
             // Health Check Services
@@ -38,7 +44,6 @@ namespace Infrastructure
             // Health Checks
             services.AddHealthChecks()
                 .AddCheck<DatabaseHealthCheck>("database");
-
 
             return services;
         }

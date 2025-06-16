@@ -32,7 +32,7 @@ namespace Infrastructure.Services
 
             lock (_lock)
             {
-                var hash = ComputeHash(key.Value);
+                var hash = ComputeSHA256Hash(key.Value);
                 var shard = _ring.FirstOrDefault(kvp => kvp.Key >= hash);
 
                 return shard.Key != 0 ? shard.Value : _ring.First().Value;
@@ -53,7 +53,7 @@ namespace Infrastructure.Services
                 for (int i = 0; i < virtualNodes; i++)
                 {
                     var virtualNodeKey = $"{shardId}:{i}";
-                    var hash = ComputeHash(virtualNodeKey);
+                    var hash = ComputeSHA256Hash(virtualNodeKey);
 
                     _ring[hash] = shardId;
                     _shardVirtualNodes[shardId].Add(hash);
@@ -100,8 +100,58 @@ namespace Infrastructure.Services
 
         public Dictionary<string, List<string>> GetRebalanceMapping(string newShardId)
         {
-            // Implementation for rebalancing logic
-            return new Dictionary<string, List<string>>();
+            var mapping = new Dictionary<string, List<string>>();
+
+            lock (_lock)
+            {
+                // Create a copy of current ring
+                var currentRing = new SortedDictionary<uint, string>(_ring);
+
+                // Simulate adding the new shard
+                var tempRing = new SortedDictionary<uint, string>(_ring);
+                var virtualNodes = 100 * _virtualNodesPerWeight / 100;
+
+                for (int i = 0; i < virtualNodes; i++)
+                {
+                    var virtualNodeKey = $"{newShardId}:{i}";
+                    var hash = ComputeSHA256Hash(virtualNodeKey);
+                    tempRing[hash] = newShardId;
+                }
+
+                // Sample key space to determine what would move
+                var sampleSize = 10000;
+                var keysToMove = new Dictionary<string, List<string>>();
+
+                for (int i = 0; i < sampleSize; i++)
+                {
+                    var sampleKey = $"sample_key_{i}";
+                    var currentShard = GetShardFromRing(currentRing, sampleKey);
+                    var newShard = GetShardFromRing(tempRing, sampleKey);
+
+                    if (currentShard != newShard && newShard == newShardId)
+                    {
+                        if (!keysToMove.ContainsKey(currentShard))
+                        {
+                            keysToMove[currentShard] = new List<string>();
+                        }
+                        keysToMove[currentShard].Add(sampleKey);
+                    }
+                }
+
+                // Convert to the expected format
+                foreach (var kvp in keysToMove)
+                {
+                    mapping[kvp.Key] = kvp.Value;
+                }
+            }
+
+            return mapping;
+        }
+        private string GetShardFromRing(SortedDictionary<uint, string> ring, string key)
+        {
+            var hash = ComputeSHA256Hash(key);
+            var shard = ring.FirstOrDefault(kvp => kvp.Key >= hash);
+            return shard.Key != 0 ? shard.Value : ring.First().Value;
         }
 
         private void InitializeRing(ShardingOptions options)
@@ -113,10 +163,11 @@ namespace Infrastructure.Services
             }
         }
 
-        private uint ComputeHash(string input)
+        private uint ComputeSHA256Hash(string input)
         {
-            using var sha1 = SHA1.Create();
-            var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(input));
+            using var sha256 = SHA256.Create();
+            var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
+            // Take first 4 bytes and convert to uint
             return BitConverter.ToUInt32(hash, 0);
         }
     }

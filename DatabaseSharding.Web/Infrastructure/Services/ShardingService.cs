@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Domain.Interfaces.Services;
 using Domain.Models;
+using Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Services

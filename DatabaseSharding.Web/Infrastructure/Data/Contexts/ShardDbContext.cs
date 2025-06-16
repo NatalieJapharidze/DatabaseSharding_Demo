@@ -14,7 +14,6 @@ namespace Infrastructure.Data.Contexts
     {
         public ShardDbContext(DbContextOptions<ShardDbContext> options) : base(options)
         {
-            // Enable detailed logging for troubleshooting
             Database.SetCommandTimeout(30);
         }
 

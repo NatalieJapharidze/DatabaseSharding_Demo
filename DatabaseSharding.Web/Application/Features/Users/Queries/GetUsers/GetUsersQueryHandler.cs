@@ -11,7 +11,7 @@ using MediatR;
 
 namespace Application.Features.Users.Queries.GetUsers
 {
-    public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result<List<UserDto>>>
+    public class GetUsersQueryHandler : IRequestHandler<GetUsersQuery, Result<PaginatedList<UserDto>>>
     {
         private readonly IUserRepository _userRepository;
 
@@ -20,19 +20,15 @@ namespace Application.Features.Users.Queries.GetUsers
             _userRepository = userRepository;
         }
 
-        public async Task<Result<List<UserDto>>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
+        public async Task<Result<PaginatedList<UserDto>>> Handle(GetUsersQuery request, CancellationToken cancellationToken)
         {
-            var users = await _userRepository.GetAllAsync(0,10,cancellationToken);
-
-            if (users == null)
+            try
             {
-                return Result.Failure<List<UserDto>>("User not found");
-            }
+                var skip = (request.Page - 1) * request.PageSize;
+                var users = await _userRepository.GetAllAsync(skip, request.PageSize, cancellationToken);
+                var totalCount = await _userRepository.GetCountAsync(cancellationToken);
 
-            List<UserDto> userDtos = new List<UserDto>();
-            foreach (var user in users)
-            {
-                var userDto = new UserDto
+                List<UserDto> userDtos = users.Select(user => new UserDto
                 {
                     Id = user.Id,
                     Email = user.Email.Value,
@@ -42,11 +38,18 @@ namespace Application.Features.Users.Queries.GetUsers
                     CreatedAt = user.CreatedAt,
                     UpdatedAt = user.UpdatedAt,
                     ShardKey = user.GetShardKey()
-                };
-                userDtos.Add(userDto);
-            }
+                }).ToList();
 
-            return Result.Success(userDtos);
+                var paginatedResult = new PaginatedList<UserDto>(userDtos, totalCount, request.Page, request.PageSize);
+
+                return Result.Success(paginatedResult);
+            }
+            catch (Exception ex)
+            {
+
+                return Result.Failure<PaginatedList<UserDto>>($"Failed to get users: {ex.Message}");
+            }
+            
         }
     }
 }

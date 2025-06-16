@@ -26,7 +26,6 @@ namespace Application.Features.Users.Commands.CreateUser
             {
                 var email = new Email(request.Email);
 
-                // Check if user already exists
                 var existingUser = await _userRepository.GetByEmailAsync(email, cancellationToken);
                 if (existingUser != null)
                 {

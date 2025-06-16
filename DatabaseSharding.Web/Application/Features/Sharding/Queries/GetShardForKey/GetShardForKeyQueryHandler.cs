@@ -23,7 +23,7 @@ namespace Application.Features.Sharding.Queries.GetShardForKey
         {
             try
             {
-                var shardKey = new ShardKey(request.Key);
+                var shardKey = new ShardKey(request.Key.ToString());
                 var shard = _hashingService.GetShard(shardKey);
                 return Result.Success(shard);
             }

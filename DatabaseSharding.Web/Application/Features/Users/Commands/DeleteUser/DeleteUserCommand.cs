@@ -4,9 +4,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Application.Common.Models;
+using Application.Features.Users.DTOs;
 using MediatR;
 
-namespace Application.Features.Sharding.Queries.GetShardForKey
+namespace Application.Features.Users.Commands.DeleteUser
 {
-    public record GetShardForKeyQuery(Guid Key) : IRequest<Result<string>>;
+    public record DeleteUserCommand(Guid Id) : IRequest<Result>;
 }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Domain.Models;
 using Infrastructure.Configuration;
 using Infrastructure.Data.Contexts;
+using Infrastructure.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -110,10 +111,19 @@ namespace Infrastructure.Services
                         _logger.LogInformation("Successfully created Users table for {ShardId}", shardId);
                     }
 
-                    // Step 4: Count existing records
-                    var userCount = await context.Users.CountAsync(cancellationToken);
-                    _logger.LogInformation("Successfully verified {ShardId}: Users table exists with {Count} records",
-                        shardId, userCount);
+                    // Step 4: Count existing records (only after confirming table exists)
+                    int userCount = 0;
+                    try
+                    {
+                        userCount = await context.Users.CountAsync(cancellationToken);
+                        _logger.LogInformation("Successfully verified {ShardId}: Users table exists with {Count} records",
+                            shardId, userCount);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to count users in {ShardId} despite table existing", shardId);
+                        throw new InvalidOperationException($"Users table exists but cannot be accessed in {shardId}: {ex.Message}");
+                    }
 
                     // Step 5: Seed test data if needed and enabled
                     if (userCount == 0 && _options.SeedTestDataOnInitialization)
@@ -153,16 +163,36 @@ namespace Infrastructure.Services
         {
             try
             {
-                // Try to execute a simple query to check if table exists
-                await context.Database.ExecuteSqlRawAsync(
-                    "SELECT 1 FROM information_schema.tables WHERE table_name = 'Users' LIMIT 1",
-                    cancellationToken);
-                return true;
+                // Check if the Users table exists in the information schema
+                const string checkTableSql = @"
+                SELECT COUNT(*) 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'Users'";
+
+                using var command = context.Database.GetDbConnection().CreateCommand();
+                command.CommandText = checkTableSql;
+
+                await context.Database.OpenConnectionAsync(cancellationToken);
+                var result = await command.ExecuteScalarAsync(cancellationToken);
+
+                var tableCount = Convert.ToInt32(result);
+                var exists = tableCount > 0;
+
+                _logger.LogDebug("Table existence check for Users: {Exists} (count: {Count})", exists, tableCount);
+                return exists;
             }
             catch (Exception ex)
             {
-                _logger.LogDebug("Users table check failed: {Message}", ex.Message);
+                _logger.LogDebug("Users table existence check failed: {Message}", ex.Message);
                 return false;
+            }
+            finally
+            {
+                if (context.Database.GetDbConnection().State == System.Data.ConnectionState.Open)
+                {
+                    await context.Database.CloseConnectionAsync();
+                }
             }
         }
 
@@ -228,19 +258,55 @@ namespace Infrastructure.Services
         private async Task CreateUsersTableManuallyAsync(ShardDbContext context, CancellationToken cancellationToken)
         {
             const string createTableSql = @"
-            CREATE TABLE IF NOT EXISTS ""Users"" (
-                ""Id"" uuid PRIMARY KEY,
-                ""Email"" varchar(255) NOT NULL UNIQUE,
-                ""FirstName"" varchar(100) NOT NULL,
-                ""LastName"" varchar(100) NOT NULL,
-                ""CreatedAt"" timestamp with time zone NOT NULL,
-                ""UpdatedAt"" timestamp with time zone NOT NULL
+            -- Drop table if it exists (for clean state)
+            DROP TABLE IF EXISTS ""Users"";
+            
+            -- Create the Users table
+            CREATE TABLE ""Users"" (
+                ""Id"" uuid NOT NULL DEFAULT gen_random_uuid(),
+                ""Email"" character varying(255) NOT NULL,
+                ""FirstName"" character varying(100) NOT NULL,
+                ""LastName"" character varying(100) NOT NULL,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                ""UpdatedAt"" timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT ""PK_Users"" PRIMARY KEY (""Id""),
+                CONSTRAINT ""IX_Users_Email"" UNIQUE (""Email"")
             );
             
-            CREATE INDEX IF NOT EXISTS ""IX_Users_Email"" ON ""Users"" (""Email"");
+            -- Create index on Email for performance
+            CREATE INDEX ""IX_Users_Email_Index"" ON ""Users"" (""Email"");
         ";
 
+            _logger.LogDebug("Executing manual table creation SQL");
             await context.Database.ExecuteSqlRawAsync(createTableSql, cancellationToken);
+            _logger.LogDebug("Manual table creation SQL executed successfully");
+        }
+
+        private async Task CreateUsersTableAlternativeAsync(ShardDbContext context, CancellationToken cancellationToken)
+        {
+            // Alternative approach: Create table step by step
+            var createCommands = new[]
+            {
+            @"CREATE TABLE IF NOT EXISTS ""Users"" (""Id"" uuid PRIMARY KEY DEFAULT gen_random_uuid())",
+            @"ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Email"" varchar(255) NOT NULL",
+            @"ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""FirstName"" varchar(100) NOT NULL",
+            @"ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""LastName"" varchar(100) NOT NULL",
+            @"ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""CreatedAt"" timestamptz NOT NULL DEFAULT NOW()",
+            @"ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""UpdatedAt"" timestamptz NOT NULL DEFAULT NOW()",
+            @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Users_Email_Unique"" ON ""Users"" (""Email"")"
+        };
+
+            foreach (var command in createCommands)
+            {
+                try
+                {
+                    await context.Database.ExecuteSqlRawAsync(command, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Command failed (may be expected): {Command}, Error: {Error}", command, ex.Message);
+                }
+            }
         }
 
         private async Task SeedTestDataAsync(ShardDbContext context, string shardId, CancellationToken cancellationToken)
