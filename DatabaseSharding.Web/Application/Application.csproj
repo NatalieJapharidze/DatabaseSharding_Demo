@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="FluentValidation" Version="11.9.0" />
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.9.0" />
+		<PackageReference Include="MediatR" Version="12.2.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.6" />
+	</ItemGroup>
+  
+	<ItemGroup>
+		<ProjectReference Include="..\Domain\Domain.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Features\Sharding\Commands\RebalanceShards\" />
+	  <Folder Include="Features\Sharding\Queries\GetShardInfo\" />
+	  <Folder Include="Features\Users\Commands\DeleteUser\" />
+	  <Folder Include="Features\Users\Commands\UpdateUser\" />
+	  <Folder Include="Features\Users\Queries\GetUserByEmail\" />
+	</ItemGroup>
+
+</Project>
