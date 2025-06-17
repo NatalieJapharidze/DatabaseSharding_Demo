@@ -18,6 +18,7 @@ cd DatabaseSharding/docker/
 ### 3. Start PostgreSQL Shards
 ```bash
 docker-compose up -d
+cd ..
 ```
 
 This starts:
@@ -27,7 +28,7 @@ This starts:
 
 ### 4. Run the Application
 ```bash
-cd src/Presentation/DatabaseSharding.Api
+cd DatabaseSharding.Web/Api/
 dotnet restore
 dotnet run
 ```
@@ -36,64 +37,64 @@ dotnet run
 
 **Check Health:**
 ```bash
-curl https://localhost:7000/health
+curl http://localhost:5042/health
 ```
 
 **Test Sharding Distribution:**
 ```bash
-curl https://localhost:7000/api/sharding/test-sharding
+curl http://localhost:5042/api/sharding/test-sharding
 ```
 
 **Access Swagger UI:**
-Navigate to `https://localhost:7000/swagger`
+Navigate to `http://localhost:5042/swagger`
 
 ## 🧪 Testing Examples
 
 ### Create Users (Automatically Sharded)
 ```bash
 # User 1
-curl -X POST https://localhost:7000/api/users \
+curl -X POST http://localhost:5042/api/users \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com","firstName":"Alice","lastName":"Smith"}'
 
 # User 2  
-curl -X POST https://localhost:7000/api/users \
+curl -X POST http://localhost:5042/api/users \
   -H "Content-Type: application/json" \
   -d '{"email":"bob@example.com","firstName":"Bob","lastName":"Johnson"}'
 ```
 
 ### Check Which Shard a Key Maps To
 ```bash
-curl https://localhost:7000/api/sharding/shard-for-key/alice@example.com
+curl http://localhost:5042/api/sharding/shard-for-key/alice@example.com
 ```
 
 ### Retrieve a User (Searches All Shards)
 ```bash
-curl https://localhost:7000/api/users/{user-id}
+curl http://localhost:5042/api/users/{user-id}
 ```
 
 ## 🏗️ Architecture Overview
 
 ### **Clean Architecture Layers**
 
-1. **Domain Layer** (`DatabaseSharding.Domain`)
+1. **Domain Layer** (`DatabaseSharding.Web/Domain`)
    - Pure business logic with no external dependencies  
    - Contains entities, value objects, domain services interfaces
    - Defines repository contracts and domain exceptions
 
-2. **Application Layer** (`DatabaseSharding.Application`)
+2. **Application Layer** (`DatabaseSharding.Web/Application`)
    - Contains application business rules
    - Implements CQRS with MediatR
    - Handles validation and logging via pipeline behaviors
    - Defines DTOs and application service contracts
 
-3. **Infrastructure Layer** (`DatabaseSharding.Infrastructure`)
+3. **Infrastructure Layer** (`DatabaseSharding.Web/Infrastructure`)
    - Implements data access and external concerns
    - Contains Entity Framework configurations
    - Implements repository patterns and sharding services
    - Handles database connections and health monitoring
 
-4. **Presentation Layer** (`DatabaseSharding.Api`)
+4. **Presentation Layer** (`DatabaseSharding.Web/Api`)
    - Web API controllers and HTTP concerns
    - Dependency injection configuration
    - Middleware and filters
@@ -102,19 +103,16 @@ curl https://localhost:7000/api/users/{user-id}
 ### **Project Structure**
 ```
 src/
-├── Core/
-│   ├── DatabaseSharding.Domain/        # Domain entities, value objects, interfaces
-│   └── DatabaseSharding.Application/   # Use cases, DTOs, application services
-├── Infrastructure/
-│   └── DatabaseSharding.Infrastructure/ # Data access, external services
-└── Presentation/
-    └── DatabaseSharding.Api/           # Web API, controllers, configuration
+├── Domain/         # Domain entities, value objects, interfaces
+├── Application/    # Use cases, DTOs, application services
+├── Infrastructure/ # Data access, external services
+└── Api/            # Web API, controllers, configuration
 ```
 
 ## 🔧 Key Features
 
 ### **Sharding Features**
-- **Consistent Hashing**: SHA-1 based with 150 virtual nodes per shard
+- **Consistent Hashing**: SHA-256 based with 150 virtual nodes per shard
 - **Automatic Database Initialization**: Creates tables on startup
 - **Health Monitoring**: Background service checks shard health every 5 minutes  
 - **Even Distribution**: Virtual nodes ensure balanced data distribution
@@ -131,13 +129,13 @@ src/
 ## 📊 How Sharding Works
 
 ### **Data Distribution**
-1. **Shard Key**: User's email address
-2. **Hash Function**: SHA-1 generates consistent hash values
+1. **Shard Key**: User's Id
+2. **Hash Function**: SHA-256 generates consistent hash values
 3. **Virtual Nodes**: 150 virtual nodes per shard for even distribution
 4. **Shard Selection**: Hash ring determines which shard stores the data
 
 ### **Read/Write Operations**
-- **Create/Update/Delete by Email**: Direct shard lookup using consistent hashing
+- **Create/Update/Delete by Id**: Direct shard lookup using consistent hashing
 - **Read by ID**: Fan-out search across all active shards (less efficient)
 - **List Operations**: Parallel queries across all shards with result aggregation
 
@@ -288,7 +286,7 @@ Control initialization behavior in `appsettings.json`:
 
 4. **Check API Health:**
    ```bash
-   curl https://localhost:7000/health
+   curl http://localhost:5042/health
    # Should return "Healthy" status
    ```
 
@@ -350,15 +348,15 @@ CREATE INDEX IF NOT EXISTS "IX_Users_Email" ON "Users" ("Email");
 When initialization works correctly, you'll see:
 
 ```
-info: DatabaseSharding.Infrastructure.Services.DatabaseInitializationService[0]
+info: Infrastructure.Services.DatabaseInitializationService[0]
       Starting database initialization for 3 shards
-info: DatabaseSharding.Infrastructure.Services.DatabaseInitializationService[0]
+info: Infrastructure.Services.DatabaseInitializationService[0]
       Successfully verified shard_0: Users table exists with 1 records
-info: DatabaseSharding.Infrastructure.Services.DatabaseInitializationService[0]
+info: Infrastructure.Services.DatabaseInitializationService[0]
       Successfully verified shard_1: Users table exists with 1 records
-info: DatabaseSharding.Infrastructure.Services.DatabaseInitializationService[0]
+info: Infrastructure.Services.DatabaseInitializationService[0]
       Successfully verified shard_2: Users table exists with 1 records
-info: DatabaseSharding.Infrastructure.Services.DatabaseInitializationService[0]
+info: Infrastructure.Services.DatabaseInitializationService[0]
       Database initialization completed successfully for all shards
 ```
 
